@@ -1,32 +1,72 @@
 import {
-  IComponent, IComponentConfiguration, IComponentConfigurationVersions,
+  IComponentConfigurationVersions,
   IComponentsConfiguration,
   IComponentVersionConfiguration,
-  ICreate, IProcessedComponentConfiguration, IProcessedConfiguration,
-  IProperty, IPropertyType,
-  IVersion
+  IProcessedComponentConfiguration, IProcessedConfiguration,
+  IProperty, IPropertyType
 } from './interfaces'
-import { createDirectory, getVersions, readFile, ucFirst, writeFile } from './util'
+import { createDirectory, readFile, ucFirst, writeFile } from './util'
 import { EOL } from 'os'
 import path from 'path'
 
-const versions = getVersions()
 const componentsDirectory = path.resolve(__dirname, '../temp')
 const componentConfigurationVersions: IComponentConfigurationVersions[] = ['v2', 'v3']
 
-/**
- * @param configuration A map of components mapped to one or more versions. The key is a string of space seperated versions.
- */
-export function createInterfaceFiles (config: IComponentsConfiguration): void {
+export function generateComponents (config: IComponentsConfiguration): void {
   const data = processConfiguration(config)
-  console.log(data)
+  // console.log(data)
+
+  writeFile(path.resolve(componentsDirectory, 'index.ts'), generateComponentsIndexFileContent(data), true)
 
   Object.keys(data).forEach(fullName => {
-    generateInterfaceFile(data[fullName])
+    const component = data[fullName]
+    const dirPath = path.resolve(componentsDirectory, component.name)
+    createDirectory(dirPath)
+    writeFile(path.resolve(dirPath, 'index.ts'), generateComponentIndexFileContent(component), true)
+    writeFile(path.resolve(dirPath, `I${component.name}.ts`), generateInterfaceFileContent(component), true)
+
+    // TODO: add custom code map
+    writeFile(path.resolve(dirPath, 'getSchema.ts'), generateGetSchemaFunctionContent(component, {}), true)
+
+    component.versions.forEach(version => {
+      const suffix = version.substring(1)
+      const filePath = path.resolve(dirPath, `${component.name}${suffix}.ts`)
+      const existingContent = readFile(filePath)
+      const customCode: Record<string, string | null> = {
+        HEADER: getReplaceableContentSection('HEADER', existingContent),
+        COMPONENT: getReplaceableContentSection('COMPONENT', existingContent)
+      }
+      const content = generateComponentContent(component, version, customCode)
+      console.log(EOL + EOL + content + EOL + EOL)
+      writeFile(filePath, content, true)
+    })
   })
 }
 
-export function generateInterfaceFile (component: IProcessedComponentConfiguration): string {
+export function generateComponentPreTests (config: IComponentsConfiguration): void {
+  // TODO: write tests that check each getSchema() to ensure that all properties have a validator definition
+}
+
+function generateComponentIndexFileContent (component: IProcessedComponentConfiguration): string {
+  const name = component.name
+  let result = `export * from './I${name}'` + EOL
+  component.versions.forEach(version => {
+    const v = version.substring(1)
+    result += `export { ${name} as ${name}${v} } from './${name}${v}'` + EOL
+  })
+  return result
+}
+
+function generateComponentsIndexFileContent (components: IProcessedConfiguration): string {
+  let result = ''
+  Object.keys(components).forEach(fullName => {
+    const name = components[fullName].name
+    result += `export * from './${name}'` + EOL
+  })
+  return result
+}
+
+function generateInterfaceFileContent (component: IProcessedComponentConfiguration): string {
   let result = ''
 
   // imports
@@ -83,37 +123,10 @@ export function generateInterfaceFile (component: IProcessedComponentConfigurati
     })
   })
 
-  console.log('--- ' + component.name + '.ts')
-  console.log(result)
-
   return result
 }
 
-export function generateComponents (config: IComponentsConfiguration): void {
-  const data = processConfiguration(config)
-  console.log(data)
-
-  Object.keys(data).forEach(fullName => {
-    const component = data[fullName]
-    const dirPath = path.resolve(componentsDirectory, component.name)
-    createDirectory(dirPath)
-    writeFile(path.resolve(dirPath, `I${component.name}.ts`), generateInterfaceFile(component), true)
-
-    component.versions.forEach(version => {
-      const suffix = version.substring(1)
-      const filePath = path.resolve(dirPath, `${component.name}${suffix}.ts`)
-      const existingContent = readFile(filePath)
-      const rx = /\/\/ BEGIN CUSTOM CODE FOR THIS COMPONENT BELOW THIS LINE([\s\S]+?)\/\/ END CUSTOM CODE FOR THIS COMPONENT ABOVE THIS LINE/
-      const match = rx.exec(existingContent)
-      const customContent = match ? match[1] : EOL + '  ' + EOL + '  '
-      const content = generateComponentContent(component, version, customContent)
-      console.log(EOL + EOL + content + EOL + EOL)
-      writeFile(filePath, content, true)
-    })
-  })
-}
-
-function generateComponentContent (component: IProcessedComponentConfiguration, version: IComponentConfigurationVersions, customCode: string): string {
+function generateComponentContent (component: IProcessedComponentConfiguration, version: IComponentConfigurationVersions, customCode: Record<string, string | null>): string {
   const name = component.name
   const v = version.substring(1)
 
@@ -122,10 +135,12 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
   result += "import { EnforcerComponent } from '../Component'" + EOL
   result += "import { ExceptionStore } from '../../Exception/ExceptionStore'" + EOL
   component[version]?.dependencies.forEach(dependency => {
-    result += `import { I${dependency}${v}, I${dependency}Definition${v} } from '../I${dependency}'` + EOL
+    result += `import { I${dependency}${v}, I${dependency}Definition${v} } from '../${dependency}/I${dependency}'` + EOL
   })
   result += `import { I${name}${v}, I${name}Definition${v} } from './I${name}'` + EOL
   result += `import { getSchema${v} } from './schemas.ts'` + EOL + EOL
+
+  result += generateReplaceableSection('HEADER', '', customCode) + EOL
 
   // class
   result += `export class ${name} extends EnforcerComponent implements I${name}${v} {` + EOL
@@ -189,11 +204,28 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
   result += '    return super.validate(definition, version, arguments[2])' + EOL
   result += '  }' + EOL + EOL
 
-  result += '  // BEGIN CUSTOM CODE FOR THIS COMPONENT BELOW THIS LINE'
-  result += customCode
-  result += '// END CUSTOM CODE FOR THIS COMPONENT ABOVE THIS LINE' + EOL
+  // result += '  // BEGIN CUSTOM CODE FOR THIS COMPONENT BELOW THIS LINE'
+  // result += customCode
+  // result += '// END CUSTOM CODE FOR THIS COMPONENT ABOVE THIS LINE' + EOL
+  result += generateReplaceableSection('COMPONENT', '  ', customCode)
 
   result += '}' + EOL
+
+  return result
+}
+
+function generateGetSchemaFunctionContent (component: IProcessedComponentConfiguration, customCode: Record<string, string | null>): string {
+  const name = component.name
+  let result = `import * from './I${name}'` + EOL + EOL
+
+  result += generateReplaceableSection('HEADER', '  ', customCode)
+
+  component.versions.forEach(version => {
+    const v = version.substring(1)
+    // TODO: this is temporary, I need to look up the actual interface names for the param and return type
+    result += `export function getSchema${v} (data: IValidatorData): IComponentSchema {` + EOL
+    result += '}'
+  })
 
   return result
 }
@@ -215,16 +247,19 @@ function generatePropertyTypes (property: IProperty, suffix: string, isDefinitio
   }
 }
 
-// export function generateComponentIndex (component: IProcessedComponentConfiguration): string {
-//   const name = component.name
-//   let result = `export from './I${name}`
-//   componentConfigurationVersions.forEach(v => {
-//     if (component[v] !== undefined) {
-//       result += 'export '
-//     }
-//   })
-//
-// }
+function generateReplaceableSection (key: string, indent: string, contentMap: Record<string, string | null>): string {
+  const content: string | null = contentMap[key] ?? null
+  let result = indent + '// <!# Custom Content Begin: ' + key + ' #!>'
+  result += typeof content === 'string' ? content : EOL + indent + EOL + indent
+  result += '// <!# Custom Content End: ' + key + ' #!>' + EOL
+  return result
+}
+
+function getReplaceableContentSection (key: string, searchContent: string): string | null {
+  const rx = new RegExp(`// <!# Custom Content Begin: ${key} #!>([\\s\\S]+?)// <!# Custom Content End: ${key} #!>`)
+  const match = rx.exec(searchContent)
+  return match === null ? null : match[1]
+}
 
 function processConfiguration (config: IComponentsConfiguration): IProcessedConfiguration {
   const result: IProcessedConfiguration = {}
@@ -257,7 +292,7 @@ function processConfiguration (config: IComponentsConfiguration): IProcessedConf
           .forEach(type => {
             const name = type.name as string
             if (dependencies[name] === undefined) dependencies[name] = []
-            dependencies[name].push(v)
+            if (!dependencies[name].includes(v)) dependencies[name].push(v)
             componentDependencies.push(name)
           })
 
@@ -273,7 +308,7 @@ function processConfiguration (config: IComponentsConfiguration): IProcessedConf
           .forEach(type => {
             const name = type.name as string
             if (dependencies[name] === undefined) dependencies[name] = []
-            dependencies[name].push(v)
+            if (!dependencies[name].includes(v)) dependencies[name].push(v)
             componentDependencies.push(name)
           })
 
