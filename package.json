@@ -4,6 +4,7 @@
   "description": "Help to generate code for openapi enforcer",
   "main": "index.js",
   "scripts": {
+    "build": "tsc",
     "test": "mocha test"
   },
   "author": "James Speirs <james.speirs@gmail.com>",
