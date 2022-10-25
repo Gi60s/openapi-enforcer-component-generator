@@ -1,4 +1,4 @@
-import { createInterfaceFiles, generateComponents } from './components'
+import { generateComponents } from './components'
 import { IComponentsConfiguration } from './interfaces'
 
 const config: IComponentsConfiguration = {
@@ -94,19 +94,6 @@ const config: IComponentsConfiguration = {
       }
     }
   },
-  Link: {
-    v3: {
-      allowsExtensions: true,
-      properties: {
-        operationRef: 'string',
-        operationId: 'string',
-        parameters: 'any{}',
-        requestBody: 'any',
-        description: 'string',
-        server: 'Server'
-      }
-    }
-  },
   Header: {
     v2: {
       allowsExtensions: true,
@@ -172,6 +159,30 @@ const config: IComponentsConfiguration = {
       }
     }
   },
+  Items: {
+    v2: {
+      allowsExtensions: true,
+      properties: {
+        type: "'array'|'boolean'|'integer'|'number'|'string'!",
+        format: 'string',
+        items: 'Items',
+        collectionFormat: "'csv'|'ssv'|'tsv'|'pipes'",
+        default: 'any',
+        maximum: 'number',
+        exclusiveMaximum: 'boolean',
+        minimum: 'number',
+        exclusiveMinimum: 'number',
+        maxLength: 'number',
+        minLength: 'number',
+        pattern: 'string',
+        maxItems: 'number',
+        minItems: 'number',
+        uniqueItems: 'boolean',
+        enum: 'any[]',
+        multipleOf: 'number'
+      }
+    }
+  },
   License: {
     v2: {
       allowsExtensions: true,
@@ -185,6 +196,19 @@ const config: IComponentsConfiguration = {
       properties: {
         name: 'string!',
         url: 'string'
+      }
+    }
+  },
+  Link: {
+    v3: {
+      allowsExtensions: true,
+      properties: {
+        operationRef: 'string',
+        operationId: 'string',
+        parameters: 'any{}',
+        requestBody: 'any',
+        description: 'string',
+        server: 'Server'
       }
     }
   },
@@ -247,7 +271,7 @@ const config: IComponentsConfiguration = {
         operationId: 'string',
         consumes: 'string[]',
         produces: 'string[]',
-        parameters: '$Parameter[]',
+        parameters: 'Parameter|Reference[]',
         responses: 'Responses!',
         schemes: 'string[]',
         deprecated: 'boolean',
@@ -324,7 +348,7 @@ const config: IComponentsConfiguration = {
     v2: {
       allowsExtensions: true,
       properties: {
-        $ref: 'string',
+        $ref: 'string', // https://github.com/OAI/OpenAPI-Specification/issues/2635
         get: 'Operation',
         put: 'Operation',
         post: 'Operation',
@@ -332,13 +356,13 @@ const config: IComponentsConfiguration = {
         options: 'Operation',
         head: 'Operation',
         patch: 'Operation',
-        parameters: 'Parameter[]'
+        parameters: 'Parameter|Reference[]'
       }
     },
     v3: {
       allowsExtensions: true,
       properties: {
-        $ref: 'string',
+        $ref: 'string', // https://github.com/OAI/OpenAPI-Specification/issues/2635
         summary: 'string',
         description: 'string',
         get: 'Operation',
@@ -350,7 +374,7 @@ const config: IComponentsConfiguration = {
         patch: 'Operation',
         trace: 'Operation',
         servers: 'Server[]',
-        parameters: 'Parameter[]'
+        parameters: 'Parameter|Reference[]'
       }
     }
   },
@@ -391,6 +415,15 @@ const config: IComponentsConfiguration = {
     }
   },
   Response: {
+    v2: {
+      allowsExtensions: true,
+      properties: {
+        description: 'string!',
+        schema: 'Schema|Reference',
+        headers: 'Header{}',
+        examples: 'Example'
+      }
+    },
     v3: {
       allowsExtensions: true,
       properties: {
@@ -402,6 +435,14 @@ const config: IComponentsConfiguration = {
     }
   },
   Responses: {
+    v2: {
+      allowsExtensions: true,
+      additionalProperties: 'Response|Reference',
+      additionalPropertiesKeyPattern: 'number',
+      properties: {
+        default: 'Response|Reference'
+      }
+    },
     v3: {
       allowsExtensions: true,
       additionalProperties: 'Response|Reference',
@@ -412,13 +453,47 @@ const config: IComponentsConfiguration = {
     }
   },
   Schema: {
+    v2: {
+      allowsExtensions: true,
+      properties: {
+        format: 'string',
+        title: 'string',
+        description: 'string',
+        default: 'any',
+        maximum: 'number',
+        exclusiveMaximum: 'number',
+        minimum: 'number',
+        exclusiveMinimum: 'number',
+        maxLength: 'number',
+        minLength: 'number',
+        pattern: 'string',
+        maxItems: 'number',
+        minItems: 'number',
+        maxProperties: 'number',
+        minProperties: 'number',
+        uniqueItems: 'boolean',
+        enum: 'any[]',
+        multipleOf: 'number',
+        required: 'string[]',
+        type: 'string',
+        items: 'Schema',
+        allOf: 'Schema|Reference[]',
+        properties: 'Schema|Reference{}',
+        additionalProperties: 'Schema|Reference',
+        discriminator: 'string',
+        readOnly: 'boolean',
+        xml: 'Xml',
+        externalDocs: 'ExternalDocs',
+        example: 'any'
+      }
+    },
     v3: {
       allowsExtensions: true,
       properties: {
         type: 'string',
-        allOf: 'Schema|Reference',
-        oneOf: 'Schema|Reference',
-        anyOf: 'Schema|Reference',
+        allOf: 'Schema|Reference[]',
+        oneOf: 'Schema|Reference[]',
+        anyOf: 'Schema|Reference[]',
         not: 'Schema|Reference',
         title: 'string',
         maximum: 'number',
@@ -435,7 +510,7 @@ const config: IComponentsConfiguration = {
         uniqueItems: 'boolean',
         enum: 'any[]',
         multipleOf: 'number',
-        requires: 'string[]',
+        required: 'string[]',
         items: 'Schema|Reference',
         properties: 'Schema|Reference{}',
         additionalProperties: 'Schema|Reference',
@@ -454,12 +529,29 @@ const config: IComponentsConfiguration = {
     }
   },
   'Security Requirement': {
+    v2: {
+      allowsExtensions: false,
+      additionalProperties: 'string[]'
+    },
     v3: {
       allowsExtensions: false,
       additionalProperties: 'string[]'
     }
   },
   'Security Scheme': {
+    v2: {
+      allowsExtensions: true,
+      properties: {
+        type: '"basic"|"apiKey"|"oauth2"!',
+        description: 'string',
+        name: 'string',
+        in: '"query"|"header"',
+        flow: '"implicit"|"password"|"application"|"accessCode"',
+        authorizationUrl: 'string',
+        tokenUrl: 'string',
+        scopes: 'string{}'
+      }
+    },
     v3: {
       allowsExtensions: true,
       properties: {
@@ -494,7 +586,37 @@ const config: IComponentsConfiguration = {
       }
     }
   },
+  Swagger: {
+    v2: {
+      allowsExtensions: true,
+      properties: {
+        swagger: "'2.0'!",
+        info: 'Info!',
+        host: 'string',
+        basePath: 'string',
+        schemes: 'string[]',
+        consumes: 'string[]',
+        produces: 'string[]',
+        paths: 'Paths!',
+        definitions: 'Schema{}',
+        parameters: 'Parameter{}',
+        responses: 'Response{}',
+        securityDefinitions: 'SecurityScheme{}',
+        security: 'SecurityRequirement[]',
+        tags: 'Tag[]',
+        externalDocs: 'ExternalDocumentation'
+      }
+    }
+  },
   Tag: {
+    v2: {
+      allowsExtensions: true,
+      properties: {
+        name: 'string!',
+        description: 'string',
+        externalDocs: 'ExternalDocumentation'
+      }
+    },
     v3: {
       allowsExtensions: true,
       properties: {
@@ -505,6 +627,16 @@ const config: IComponentsConfiguration = {
     }
   },
   Xml: {
+    v2: {
+      allowsExtensions: true,
+      properties: {
+        name: 'string',
+        namespace: 'string',
+        prefix: 'string',
+        attribute: 'boolean',
+        wrapped: 'boolean'
+      }
+    },
     v3: {
       allowsExtensions: true,
       properties: {
@@ -520,153 +652,3 @@ const config: IComponentsConfiguration = {
 
 
 generateComponents(config)
-
-// const s = createInterfaceFile({
-//   Contact: config2.Contact
-// })
-
-// const s = createInterfaceFile({
-//   name: 'Foo',
-//   versions: ['2.0', '3.0.1'],
-//   properties: {
-//     a: 'number',
-//     b: 'boolean',
-//     c: 'Bar'
-//   },
-//   dependencies: []
-// })
-
-// console.log(s)
-
-// import inquirer from 'inquirer'
-// import { EOL } from 'os'
-// import path from 'path'
-//
-// function required (value: string): boolean | string {
-//   return value.length === 0 ? 'Value is required' : true
-// }
-//
-// function ucFirst (value: string): string {
-//   return value[0].toUpperCase() + value.substring(1)
-// }
-//
-// const versions = ['2.0', '3.0.0', '3.0.1', '3.0.2', '3.0.3'];
-//
-// inquirer
-//   .prompt([
-//     {
-//       type: 'input',
-//       name: 'name',
-//       message: 'What is the name of the component?',
-//       validate: required
-//     },
-//     {
-//       type: 'checkbox',
-//       name: 'specs',
-//       message: 'Select supported versions:',
-//       choices: versions.slice(0),
-//     },
-//     {
-//       type: 'input',
-//       name: 'properties',
-//       message: 'Enter properties, seperated by spaces:'
-//     }
-//   ])
-//   .then((answers) => {
-//     const name = ucFirst(answers.name.replace(/ ([a-z])/g, function (g) { return g[1].toUpperCase() }))
-//     const dirPath = path.resolve(__dirname, '../src/components/', name)
-//
-//     const majors = [];
-//     answers.specs.forEach(spec => {
-//       const major = parseInt(spec.split('.')[0])
-//       if (!majors.includes(major)) majors.push(major)
-//     })
-//     majors.sort()
-//
-//     const properties = answers.properties.split(/ +/)
-//
-//     // create interface file
-//     let cInterface = "import { IComponentInstance } from '../IComponent'" + EOL + EOL
-//     majors.forEach(major => {
-//       cInterface += `export interface I${name}${major} extends IComponentInstance {` + EOL
-//       properties.forEach(property => {
-//         cInterface += `  ${property}: unknown` + EOL
-//       })
-//       cInterface += '}' + EOL + EOL
-//
-//       cInterface += `export interface I${name}${major}Definition {` + EOL
-//       properties.forEach(property => {
-//         cInterface += `  ${property}: unknown` + EOL
-//       })
-//       cInterface += '}' + EOL + EOL
-//     })
-//     console.log('---- ' + dirPath + 'I' + name + '.ts')
-//     console.log(cInterface)
-//
-//     // create component files
-//     majors.forEach(major => {
-//       let cImplementation = "import { EnforcerComponent } from '../src/components/Component'" + EOL
-//       cImplementation += "import { ExceptionStore, IComponentSpec, IVersion } from '../src/components/IComponent'" + EOL
-//       cImplementation += "import { ISchemaData } from '../src/components/ISchemaProcessor'" + EOL
-//       cImplementation += "import { IComponentSchemaDefinition } from '../src/components/IComponentSchema'" + EOL
-//       cImplementation += `import { I${name}${major}, I${name}${major}Definition } from './I${name}` + EOL
-//
-//       cImplementation += `const schema: IComponentSchemaDefinition<I${name}${major}Definition, I${name}${major}> = {` + EOL
-//       cImplementation += "  type: 'object'," + EOL
-//       cImplementation += "  allowsSchemaExtensions: true false," + EOL
-//       cImplementation += "  properties: [" + EOL
-//       cImplementation += "    {" + EOL
-//       cImplementation += "      name: ''," + EOL
-//       cImplementation += "      schema: {}" + EOL
-//       cImplementation += "    }" + EOL
-//       cImplementation += "  ]"
-//       cImplementation += "}"
-//
-//       cImplementation += `export class ${name} extends EnforcerComponent implements I${name}${major} {` + EOL
-//       properties.forEach(property => {
-//         cImplementation += `  ${property}: unknown` + EOL
-//       })
-//       cImplementation += EOL
-//
-//       cImplementation += `  constructor (definition: I${name}${major}Definition, version?: IVersion) {` + EOL
-//       cImplementation += '    super(definition, version, arguments[2])' + EOL
-//       cImplementation += '  }' + EOL + EOL
-//
-//       cImplementation += '  static spec: IComponentSpec = {' + EOL
-//       versions.forEach(version => {
-//         const specs = []
-//         const v = parseInt(version.split('.')[0])
-//         if (v === major) {
-//           specs.push(`    '${version}': 'https://spec.openapis.org/oas/v${version}'`)
-//         } else if (majors.includes(v)) {
-//           specs.push(`    '${version}': true`)
-//         } else {
-//           specs.push(`    '${version}': false`)
-//         }
-//         cImplementation += specs.join(',' + EOL)
-//       })
-//       cImplementation += '  }'
-//
-//       cImplementation += `  static validate (definition: I${name}${major}Definition, version?: IVersion): ExceptionStore {` + EOL
-//       cImplementation += '    return super.validate(definition, version, arguments[2])' + EOL
-//       cImplementation += '  }' + EOL + EOL
-//
-//       cImplementation += `  static getSchema (data: ISchemaData): IComponentSchemaDefinition<I${name}${major}Definition, I${name}${major}> {` + EOL
-//       cImplementation += '    return schema' + EOL
-//       cImplementation += '  }'
-//
-//       cImplementation += '}'
-//
-//       console.log('---- ' + dirPath + name + major + '.ts')
-//       console.log(cImplementation)
-//     })
-//
-//
-//   })
-//   .catch((error) => {
-//     if (error.isTtyError) {
-//       // Prompt couldn't be rendered in the current environment
-//     } else {
-//       // Something else went wrong
-//     }
-//   })

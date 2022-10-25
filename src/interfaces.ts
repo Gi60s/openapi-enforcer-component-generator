@@ -1,11 +1,3 @@
-
-// export interface ICreateComponent {
-//   name: string
-//   versions: IVersion[]
-//   properties: Record<string, string>
-//   dependencies: string[]
-// }
-
 export type IComponentsConfiguration = Record<string, IComponentConfiguration>
 
 export type IComponentConfigurationVersions = 'v2' | 'v3'
@@ -38,24 +30,6 @@ interface IProcessedComponentVersionConfiguration {
   additionalPropertiesKeyPattern: string
   properties?: Record<string, IProperty>
   dependencies: string[]
-}
-
-
-
-
-
-
-export interface ICreate {
-  components: ICreateComponents
-  versions: IVersion[]
-}
-
-export type ICreateComponents = Record<string, Record<string, string>>
-
-export interface IComponent {
-  fullName: string // name including spaces
-  name: string // name pascal case PascalCase
-  specs: Record<IVersion, string | boolean>
 }
 
 export interface IProperty {

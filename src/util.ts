@@ -1,7 +1,4 @@
 import fs from 'fs'
-import path from 'path'
-import { IVersion } from './interfaces'
-
 
 export function createDirectory (filePath: string): void {
   try {
@@ -13,10 +10,6 @@ export function createDirectory (filePath: string): void {
 
 export function ucFirst (value: string): string {
   return value[0].toUpperCase() + value.substring(1)
-}
-
-export function getVersions (): IVersion[] {
-  return ['2.0', '3.0.0', '3.0.1', '3.0.2', '3.0.3']
 }
 
 export function readFile (filePath: string): string {
