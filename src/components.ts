@@ -1,3 +1,4 @@
+import fs from 'fs'
 import {
   IComponentConfigurationVersions,
   IComponentsConfiguration,
@@ -5,7 +6,6 @@ import {
   IProcessedComponentConfiguration, IProcessedConfiguration,
   IProperty, IPropertyType
 } from './interfaces'
-import { createDirectory, readFile, ucFirst, writeFile } from './util'
 import { EOL } from 'os'
 import path from 'path'
 
@@ -14,37 +14,34 @@ const componentConfigurationVersions: IComponentConfigurationVersions[] = ['v2',
 
 export function generateComponents (config: IComponentsConfiguration): void {
   const data = processConfiguration(config)
-  // console.log(data)
 
-  writeFile(path.resolve(componentsDirectory, 'index.ts'), generateComponentsIndexFileContent(data), true)
+  updateFile(path.resolve(componentsDirectory, 'index.ts'), generateComponentsIndexFileContent(data))
 
   Object.keys(data).forEach(fullName => {
     const component = data[fullName]
     const dirPath = path.resolve(componentsDirectory, component.name)
     createDirectory(dirPath)
-    writeFile(path.resolve(dirPath, 'index.ts'), generateComponentIndexFileContent(component), true)
-    writeFile(path.resolve(dirPath, `I${component.name}.ts`), generateInterfaceFileContent(component), true)
-
-    // TODO: add custom code map
-    writeFile(path.resolve(dirPath, 'getSchema.ts'), generateGetSchemaFunctionContent(component, {}), true)
+    updateFile(path.resolve(dirPath, 'index.ts'), generateComponentIndexFileContent(component))
+    updateFile(path.resolve(dirPath, `I${component.name}.ts`), generateInterfaceFileContent(component))
 
     component.versions.forEach(version => {
       const suffix = version.substring(1)
       const filePath = path.resolve(dirPath, `${component.name}${suffix}.ts`)
-      const existingContent = readFile(filePath)
-      const customCode: Record<string, string | null> = {
-        HEADER: getReplaceableContentSection('HEADER', existingContent),
-        COMPONENT: getReplaceableContentSection('COMPONENT', existingContent)
-      }
-      const content = generateComponentContent(component, version, customCode)
-      console.log(EOL + EOL + content + EOL + EOL)
-      writeFile(filePath, content, true)
+      updateFile(filePath, generateComponentContent(component, version))
     })
   })
 }
 
 export function generateComponentPreTests (config: IComponentsConfiguration): void {
   // TODO: write tests that check each getSchema() to ensure that all properties have a validator definition
+}
+
+export function createDirectory (filePath: string): void {
+  try {
+    fs.mkdirSync(filePath)
+  } catch (e: any) {
+    if (e.code !== 'EEXIST') throw e
+  }
 }
 
 function generateComponentIndexFileContent (component: IProcessedComponentConfiguration): string {
@@ -126,7 +123,7 @@ function generateInterfaceFileContent (component: IProcessedComponentConfigurati
   return result
 }
 
-function generateComponentContent (component: IProcessedComponentConfiguration, version: IComponentConfigurationVersions, customCode: Record<string, string | null>): string {
+function generateComponentContent (component: IProcessedComponentConfiguration, version: IComponentConfigurationVersions): string {
   const name = component.name
   const v = version.substring(1)
 
@@ -134,13 +131,13 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
   let result = "import { IComponentSpec, IVersion } from '../IComponent'" + EOL
   result += "import { EnforcerComponent } from '../Component'" + EOL
   result += "import { ExceptionStore } from '../../Exception/ExceptionStore'" + EOL
+  result += "import { ISchemaProcessor, IComponentSchemaDefinition } from '../IComponentSchema'" + EOL
   component[version]?.dependencies.forEach(dependency => {
     result += `import { I${dependency}${v}, I${dependency}Definition${v} } from '../${dependency}/I${dependency}'` + EOL
   })
   result += `import { I${name}${v}, I${name}Definition${v} } from './I${name}'` + EOL
-  result += `import { getSchema${v} } from './schemas.ts'` + EOL + EOL
 
-  result += generateReplaceableSection('HEADER', '', customCode) + EOL
+  result += generateReplaceableSection('HEADER', '') + EOL
 
   // class
   result += `export class ${name} extends EnforcerComponent implements I${name}${v} {` + EOL
@@ -198,27 +195,26 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
   }
   result += '  }' + EOL + EOL
 
-  result += `  static getSchema = getSchema${v}` + EOL + EOL
+  result += `  static getSchema (data: ISchemaProcessor): IComponentSchemaDefinition<I${name}Definition${v}, I${name}${v}> {` + EOL
+  result += generateReplaceableSection('SCHEMA_DEFINITION', '    ')
+  result += '  }' + EOL + EOL
 
   result += `  static validate (definition: I${name}Definition${v}, version?: IVersion): ExceptionStore {` + EOL
   result += '    return super.validate(definition, version, arguments[2])' + EOL
   result += '  }' + EOL + EOL
 
-  // result += '  // BEGIN CUSTOM CODE FOR THIS COMPONENT BELOW THIS LINE'
-  // result += customCode
-  // result += '// END CUSTOM CODE FOR THIS COMPONENT ABOVE THIS LINE' + EOL
-  result += generateReplaceableSection('COMPONENT', '  ', customCode)
+  result += generateReplaceableSection('BODY', '  ')
 
   result += '}' + EOL
 
   return result
 }
 
-function generateGetSchemaFunctionContent (component: IProcessedComponentConfiguration, customCode: Record<string, string | null>): string {
+function generateGetSchemaFunctionContent (component: IProcessedComponentConfiguration): string {
   const name = component.name
   let result = `import * from './I${name}'` + EOL + EOL
 
-  result += generateReplaceableSection('HEADER', '  ', customCode)
+  result += generateReplaceableSection('HEADER', '  ')
 
   component.versions.forEach(version => {
     const v = version.substring(1)
@@ -247,18 +243,10 @@ function generatePropertyTypes (property: IProperty, suffix: string, isDefinitio
   }
 }
 
-function generateReplaceableSection (key: string, indent: string, contentMap: Record<string, string | null>): string {
-  const content: string | null = contentMap[key] ?? null
-  let result = indent + '// <!# Custom Content Begin: ' + key + ' #!>'
-  result += typeof content === 'string' ? content : EOL + indent + EOL + indent
-  result += '// <!# Custom Content End: ' + key + ' #!>' + EOL
-  return result
-}
-
-function getReplaceableContentSection (key: string, searchContent: string): string | null {
-  const rx = new RegExp(`// <!# Custom Content Begin: ${key} #!>([\\s\\S]+?)// <!# Custom Content End: ${key} #!>`)
-  const match = rx.exec(searchContent)
-  return match === null ? null : match[1]
+function generateReplaceableSection (key: string, indent: string): string {
+  return indent + '// <!# Custom Content Begin: ' + key + ' #!>' + EOL +
+    indent + EOL +
+    indent + '// <!# Custom Content End: ' + key + ' #!>' + EOL
 }
 
 function processConfiguration (config: IComponentsConfiguration): IProcessedConfiguration {
@@ -375,4 +363,38 @@ function parsePropertyType (key: string, type: string): IProperty | null {
     types
   }
   return result
+}
+
+export function ucFirst (value: string): string {
+  return value[0].toUpperCase() + value.substring(1)
+}
+
+export function updateFile (filePath: string, content: string): void {
+  let existingContent: string = ''
+  try {
+    existingContent = fs.readFileSync(filePath, 'utf8')
+  } catch (e: any) {
+    if (e.code !== 'ENOENT') throw e
+  }
+
+  // from the existing content, pull out customizable content sections
+  const rx = /\/\/ <!# Custom Content Begin: (\w+?) #!>([\s\S]+?)\/\/ <!# Custom Content End: (\w+?) #!>/g
+  const mappings: Record<string, string> = {}
+  let match
+  while (match = rx.exec(existingContent)) {
+    if (match[1] === match[3]) {
+      mappings[match[1]] = match[2]
+    }
+  }
+
+  // inject custom code back into the new template
+  Object.keys(mappings).forEach(key => {
+    const rx = new RegExp(`(// <!# Custom Content Begin: ${key} #!>)([\\s\\S]+?)(// <!# Custom Content End: ${key} #!>)`)
+    const match = rx.exec(content)
+    if (match !== null) {
+      content = content.replace(match[1] + match[2] + match[3], match[1] + mappings[key] + match[3])
+    }
+  })
+
+  fs.writeFileSync(filePath, content, 'utf8');
 }
