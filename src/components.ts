@@ -3,7 +3,7 @@ import {
   IComponentConfigurationVersions,
   IComponentsConfiguration,
   IComponentVersionConfiguration,
-  IProcessedComponentConfiguration, IProcessedConfiguration,
+  IProcessedComponentConfiguration, IProcessedComponentVersionConfiguration, IProcessedConfiguration,
   IProperty, IPropertyType
 } from './interfaces'
 import { EOL } from 'os'
@@ -75,17 +75,19 @@ function generateInterfaceFileContent (component: IProcessedComponentConfigurati
       .forEach(v => {
         deps.push(`I${type}${v}`, `I${type}Definition${v}`)
       })
-    result += "import { " + deps.join(', ') + ` } from '../${type}/I${type}'` + EOL
+    result += `import { ${deps.join(', ')} } from '../${type}/I${type}'` + EOL
   })
   result += EOL
 
   component.versions.forEach(v => {
     const name = component.name
     const major = v.substring(1)
-
-    const properties = component[v]?.properties
-    const allowsExtensions = component[v]?.allowsExtensions
-    const additionalProperties = component[v]?.additionalProperties
+    const {
+        additionalProperties,
+        additionalPropertiesKeyPattern: keyPattern,
+        allowsExtensions,
+        properties
+      } = component[v] as IProcessedComponentVersionConfiguration
 
     ;['definition', 'built'].forEach(set => {
       if (set === 'definition') {
@@ -95,11 +97,11 @@ function generateInterfaceFileContent (component: IProcessedComponentConfigurati
       }
 
       if (allowsExtensions) {
+        // eslint-disable-next-line no-template-curly-in-string
         result += '  [extension: `x-${string}`]: any' + EOL
       }
 
       if (additionalProperties !== undefined) {
-        const keyPattern = component[v]?.additionalPropertiesKeyPattern
         result += `  [key: ${keyPattern}]: `
         result += generatePropertyTypes(additionalProperties, major, set === 'definition') + EOL
       }
@@ -116,7 +118,6 @@ function generateInterfaceFileContent (component: IProcessedComponentConfigurati
       }
 
       result += '}' + EOL + EOL
-
     })
   })
 
@@ -126,40 +127,48 @@ function generateInterfaceFileContent (component: IProcessedComponentConfigurati
 function generateComponentContent (component: IProcessedComponentConfiguration, version: IComponentConfigurationVersions): string {
   const name = component.name
   const v = version.substring(1)
+  const {
+    additionalProperties,
+    additionalPropertiesKeyPattern: keyPattern,
+    allowsExtensions,
+    dependencies,
+    properties
+  } = component[version] as IProcessedComponentVersionConfiguration
 
   // imports
   let result = "import { IComponentSpec, IVersion } from '../IComponent'" + EOL
   result += "import { EnforcerComponent } from '../Component'" + EOL
   result += "import { ExceptionStore } from '../../Exception/ExceptionStore'" + EOL
-  result += "import { ISchemaProcessor, IComponentSchemaDefinition } from '../IComponentSchema'" + EOL
-  component[version]?.dependencies.forEach(dependency => {
-    result += `import { I${dependency}${v}, I${dependency}Definition${v} } from '../${dependency}/I${dependency}'` + EOL
+  result += "import { IComponentSchemaDefinition, IComponentSchemaProperty } from '../IComponentSchema'" + EOL
+  result += "import { ISchemaProcessor } from '../ISchemaProcessor'" + EOL
+  dependencies.forEach(dependency => {
+    result += `import { ${dependency}${v}, I${dependency}${v}, I${dependency}Definition${v} } from '../${dependency}'` + EOL
   })
   result += `import { I${name}${v}, I${name}Definition${v} } from './I${name}'` + EOL
 
+  result += EOL
   result += generateReplaceableSection('HEADER', '') + EOL
 
   // class
   result += `export class ${name} extends EnforcerComponent implements I${name}${v} {` + EOL
-  if (component[version]?.allowsExtensions) {
+  if (allowsExtensions) {
+    // eslint-disable-next-line no-template-curly-in-string
     result += '  [extension: `x-${string}`]: any' + EOL
   }
 
-  const additionalProperties = component[version]?.additionalProperties
   if (additionalProperties !== undefined) {
-    const keyPattern = component[version]?.additionalPropertiesKeyPattern
     result += `  [key: ${keyPattern}]: `
     result += generatePropertyTypes(additionalProperties, v, false) + EOL
   }
 
-  const properties = Object.keys(component[version]?.properties ?? {})
-  properties.forEach(key => {
+  const props = Object.keys(properties ?? {})
+  props.forEach(key => {
     const property = component[version]?.properties?.[key] as IProperty
     const conditional = property.required ? '!' : '?'
     result += `  ${key}${conditional}: `
     result += generatePropertyTypes(property, v, false) + EOL
   })
-  if (properties.length > 0) result += EOL
+  if (props.length > 0) result += EOL
 
   result += `  constructor (definition: I${name}Definition${v}, version?: IVersion) {` + EOL
   result += '    super(definition, version, arguments[2])' + EOL
@@ -170,10 +179,10 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
     if (version === 'v2') {
       result += `    '2.0': 'https://spec.openapis.org/oas/v2.0#${component.reference}-object',` + EOL
     } else {
-      result += `    '2.0': true,` + EOL
+      result += "    '2.0': true," + EOL
     }
   } else {
-    result += `    '2.0': false,` + EOL
+    result += "    '2.0': false," + EOL
   }
   if ('v3' in component) {
     if (version === 'v3') {
@@ -182,21 +191,52 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
       result += `    '3.0.2': 'https://spec.openapis.org/oas/v3.0.2#${component.reference}-object',` + EOL
       result += `    '3.0.3': 'https://spec.openapis.org/oas/v3.0.3#${component.reference}-object'` + EOL
     } else {
-      result += `    '3.0.0': true,` + EOL
-      result += `    '3.0.1': true,` + EOL
-      result += `    '3.0.2': true,` + EOL
-      result += `    '3.0.3': true` + EOL
+      result += "    '3.0.0': true," + EOL
+      result += "    '3.0.1': true," + EOL
+      result += "    '3.0.2': true," + EOL
+      result += "    '3.0.3': true" + EOL
     }
   } else {
-    result += `    '3.0.0': false,` + EOL
-    result += `    '3.0.1': false,` + EOL
-    result += `    '3.0.2': false,` + EOL
-    result += `    '3.0.3': false` + EOL
+    result += "    '3.0.0': false," + EOL
+    result += "    '3.0.1': false," + EOL
+    result += "    '3.0.2': false," + EOL
+    result += "    '3.0.3': false" + EOL
   }
   result += '  }' + EOL + EOL
 
   result += `  static getSchema (data: ISchemaProcessor): IComponentSchemaDefinition<I${name}Definition${v}, I${name}${v}> {` + EOL
-  result += generateReplaceableSection('SCHEMA_DEFINITION', '    ')
+  if (additionalProperties !== undefined) {
+    const types = additionalProperties.types
+      .map(t => t.isComponent ? `I${t.name}${v}|I${t.name}Definition${v}` : t.type)
+      .join('|')
+    result += `    const additionalProperties: IComponentSchemaProperty<${types}> = ` +
+      generateGetSchemaProperty(additionalProperties, '    ', v) + EOL + EOL
+  }
+  props.forEach(key => {
+    const property = component[version]?.properties?.[key] as IProperty
+    const types = property.types
+      .map(t => t.isComponent ? `I${t.name}${v}|I${t.name}Definition${v}` : t.type)
+      .join('|')
+    result += `    const ${key}: IComponentSchemaProperty<${types}> = ` + generateGetSchemaProperty(property, '    ', v) + EOL + EOL
+  })
+  result += `    const schema: IComponentSchemaDefinition<I${name}Definition${v}, I${name}${v}> = {` + EOL
+  result += "      type: 'object'," + EOL
+  result += `      allowsSchemaExtensions: ${String(allowsExtensions)}`
+  if (additionalProperties !== undefined) {
+    result += ',' + EOL
+    result += '      additionalProperties'
+  }
+  if (props.length > 0) {
+    result += ',' + EOL
+    result += '      properties: [' + EOL
+    result += '        ' + props.join(',' + EOL + '        ') + EOL
+    result += '      ]'
+  }
+  result += EOL
+  result += '    }' + EOL
+  result += EOL
+  result += generateReplaceableSection('SCHEMA_DEFINITION', '    ') + EOL
+  result += '    return schema' + EOL
   result += '  }' + EOL + EOL
 
   result += `  static validate (definition: I${name}Definition${v}, version?: IVersion): ExceptionStore {` + EOL
@@ -205,23 +245,9 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
 
   result += generateReplaceableSection('BODY', '  ')
 
-  result += '}' + EOL
+  result += '}' + EOL + EOL
 
-  return result
-}
-
-function generateGetSchemaFunctionContent (component: IProcessedComponentConfiguration): string {
-  const name = component.name
-  let result = `import * from './I${name}'` + EOL + EOL
-
-  result += generateReplaceableSection('HEADER', '  ')
-
-  component.versions.forEach(version => {
-    const v = version.substring(1)
-    // TODO: this is temporary, I need to look up the actual interface names for the param and return type
-    result += `export function getSchema${v} (data: IValidatorData): IComponentSchema {` + EOL
-    result += '}'
-  })
+  result += generateReplaceableSection('FOOTER', '') + EOL
 
   return result
 }
@@ -249,6 +275,46 @@ function generateReplaceableSection (key: string, indent: string): string {
     indent + '// <!# Custom Content End: ' + key + ' #!>' + EOL
 }
 
+function generateGetSchemaProperty (property: IProperty, indent: string, v: string): string {
+  const next = EOL + indent
+  if (property.types.length === 1) {
+    return generateGetSchemaPropertyType(property.types[0], property, indent, v)
+  } else {
+    let result = '{' + next
+    result += "  type: 'oneOf'," + next
+    result += '  oneOf: [' + next
+    result += '    ' + property.types
+      .map(type => generateGetSchemaPropertyType(type, property, indent + '    ', v))
+      .join(',' + next + '    ')
+    result += '  ],' + next
+    result += '  error (data) => {' + next
+    result += '    // TODO: handle error if none matched' + next
+    result += '  }'
+    return result
+  }
+}
+
+function generateGetSchemaPropertyType (type: IPropertyType, property: IProperty, indent: string, v: string): string {
+  const next = EOL + indent
+  let result = '{' + next
+  result += `  name: '${property.key}',` + next
+  if (property.required) {
+    result += '  required: true,' + next
+  }
+  result += '  schema: {' + next
+  result += `    type: '${type.isComponent ? 'component' : type.type}'`
+  if (type.isComponent) {
+    result += ',' + next
+    result += `    allowsRef: ${String(property.refAllowed)},` + next
+    result += `    component: ${type.name!}${v}` + next
+  } else {
+    result += next
+  }
+  result += '  }' + next
+  result += '}'
+  return result
+}
+
 function processConfiguration (config: IComponentsConfiguration): IProcessedConfiguration {
   const result: IProcessedConfiguration = {}
 
@@ -272,7 +338,7 @@ function processConfiguration (config: IComponentsConfiguration): IProcessedConf
         const definition = component[v] as IComponentVersionConfiguration
         const componentDependencies: string[] = []
 
-        const additionalProperties: IProperty | null = definition.additionalProperties
+        const additionalProperties: IProperty | null = definition.additionalProperties !== undefined
           ? parsePropertyType('', definition.additionalProperties)
           : null
         additionalProperties?.types
@@ -290,7 +356,7 @@ function processConfiguration (config: IComponentsConfiguration): IProcessedConf
           .filter(property => property !== null) as IProperty[]
 
         properties
-          .map(property => property?.types as IPropertyType[])
+          .map(property => property.types)
           .flat()
           .filter(type => type.isComponent)
           .forEach(type => {
@@ -303,7 +369,7 @@ function processConfiguration (config: IComponentsConfiguration): IProcessedConf
         result[fullName][v] = {
           allowsExtensions: definition.allowsExtensions,
           additionalProperties: additionalProperties === null ? undefined : additionalProperties,
-          additionalPropertiesKeyPattern: definition.additionalPropertiesKeyPattern
+          additionalPropertiesKeyPattern: definition.additionalPropertiesKeyPattern !== undefined
             ? definition.additionalPropertiesKeyPattern
             : 'string',
           properties: properties.reduce((prev: Record<string, IProperty>, curr) => {
@@ -380,8 +446,8 @@ export function updateFile (filePath: string, content: string): void {
   // from the existing content, pull out customizable content sections
   const rx = /\/\/ <!# Custom Content Begin: (\w+?) #!>([\s\S]+?)\/\/ <!# Custom Content End: (\w+?) #!>/g
   const mappings: Record<string, string> = {}
-  let match
-  while (match = rx.exec(existingContent)) {
+  let match: RegExpExecArray | null = null
+  while ((match = rx.exec(existingContent)) !== null) {
     if (match[1] === match[3]) {
       mappings[match[1]] = match[2]
     }
@@ -396,5 +462,5 @@ export function updateFile (filePath: string, content: string): void {
     }
   })
 
-  fs.writeFileSync(filePath, content, 'utf8');
+  fs.writeFileSync(filePath, content, 'utf8')
 }

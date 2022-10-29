@@ -24,7 +24,7 @@ export interface IProcessedComponentConfiguration {
   v3?: IProcessedComponentVersionConfiguration
 }
 
-interface IProcessedComponentVersionConfiguration {
+export interface IProcessedComponentVersionConfiguration {
   allowsExtensions: boolean
   additionalProperties?: IProperty
   additionalPropertiesKeyPattern: string
