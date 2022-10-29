@@ -9,6 +9,7 @@ export interface IComponentVersionConfiguration {
   additionalProperties?: string
   additionalPropertiesKeyPattern?: string
   properties?: Record<string, string>
+  schemaIsCacheable?: boolean
 }
 
 export interface IProcessedConfiguration {
@@ -30,6 +31,7 @@ export interface IProcessedComponentVersionConfiguration {
   additionalPropertiesKeyPattern: string
   properties?: Record<string, IProperty>
   dependencies: string[]
+  schemaIsCacheable: boolean
 }
 
 export interface IProperty {

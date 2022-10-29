@@ -132,7 +132,8 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
     additionalPropertiesKeyPattern: keyPattern,
     allowsExtensions,
     dependencies,
-    properties
+    properties,
+    schemaIsCacheable
   } = component[version] as IProcessedComponentVersionConfiguration
 
   // imports
@@ -147,6 +148,10 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
   result += `import { I${name}${v}, I${name}Definition${v} } from './I${name}'` + EOL
 
   result += EOL
+  if (schemaIsCacheable) {
+    result += `let cachedSchema: IComponentSchemaDefinition<I${name}Definition${v}, I${name}${v}> | null = null` + EOL + EOL
+  }
+
   result += generateReplaceableSection('HEADER', '') + EOL
 
   // class
@@ -205,6 +210,11 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
   result += '  }' + EOL + EOL
 
   result += `  static getSchema (data: ISchemaProcessor): IComponentSchemaDefinition<I${name}Definition${v}, I${name}${v}> {` + EOL
+  if (schemaIsCacheable) {
+    result += '    if (cachedSchema !== null) {' + EOL
+    result += '      return cachedSchema' + EOL
+    result += '    }' + EOL + EOL
+  }
   if (additionalProperties !== undefined) {
     const types = additionalProperties.types
       .map(t => t.isComponent ? `I${t.name}${v}|I${t.name}Definition${v}` : t.type)
@@ -236,6 +246,9 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
   result += '    }' + EOL
   result += EOL
   result += generateReplaceableSection('SCHEMA_DEFINITION', '    ') + EOL
+  if (schemaIsCacheable) {
+    result += '    cachedSchema = schema' + EOL
+  }
   result += '    return schema' + EOL
   result += '  }' + EOL + EOL
 
@@ -376,7 +389,8 @@ function processConfiguration (config: IComponentsConfiguration): IProcessedConf
             prev[curr.key] = curr
             return prev
           }, {}),
-          dependencies: Array.from(new Set(componentDependencies))
+          dependencies: Array.from(new Set(componentDependencies)),
+          schemaIsCacheable: definition.schemaIsCacheable === undefined ? true : definition.schemaIsCacheable
         }
       }
     })

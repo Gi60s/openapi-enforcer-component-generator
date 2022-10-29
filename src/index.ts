@@ -455,6 +455,7 @@ const config: IComponentsConfiguration = {
   Schema: {
     v2: {
       allowsExtensions: true,
+      schemaIsCacheable: false,
       properties: {
         format: 'string',
         title: 'string',
@@ -489,6 +490,7 @@ const config: IComponentsConfiguration = {
     },
     v3: {
       allowsExtensions: true,
+      schemaIsCacheable: false,
       properties: {
         type: 'string',
         allOf: 'Schema|Reference[]',
