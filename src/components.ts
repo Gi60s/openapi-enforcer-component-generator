@@ -402,11 +402,6 @@ function processConfiguration (config: IComponentsConfiguration): IProcessedConf
 function parsePropertyType (key: string, type: string): IProperty | null {
   if (type === '') return null
 
-  const refAllowed = type[0] === '$'
-  if (refAllowed) {
-    type = type.substring(1)
-  }
-
   let isArray = false
   let isMap = false
   let isRequired = false
@@ -434,13 +429,15 @@ function parsePropertyType (key: string, type: string): IProperty | null {
       }
     })
 
+  const refAllowed = types.find(t => t.isComponent && t.name === 'Reference') !== undefined
+
   const result: IProperty = {
     refAllowed,
     key,
     isArray,
     isMap,
     required: isRequired,
-    types
+    types: types.filter(t => !(t.isComponent && t.name === 'Reference'))
   }
   return result
 }
