@@ -1,5 +1,6 @@
 import { generateComponents } from './components'
 import { IComponentsConfiguration } from './interfaces'
+import path from "path";
 
 const config: IComponentsConfiguration = {
   Callback: {
@@ -480,7 +481,7 @@ const config: IComponentsConfiguration = {
         items: 'Schema',
         allOf: 'Schema|Reference[]',
         properties: 'Schema|Reference{}',
-        additionalProperties: 'Schema|Reference',
+        additionalProperties: 'Schema|Reference|boolean',
         discriminator: 'string',
         readOnly: 'boolean',
         xml: 'Xml',
@@ -515,7 +516,7 @@ const config: IComponentsConfiguration = {
         required: 'string[]',
         items: 'Schema|Reference',
         properties: 'Schema|Reference{}',
-        additionalProperties: 'Schema|Reference',
+        additionalProperties: 'Schema|Reference|boolean',
         description: 'string',
         format: 'string',
         default: 'any',
@@ -652,5 +653,5 @@ const config: IComponentsConfiguration = {
   }
 }
 
-
-generateComponents(config)
+generateComponents(path.resolve(__dirname, '../temp'), config)
+generateComponents('C:\\Users\\james\\Documents\\Code\\openapi-enforcer-v2.5\\src\\components', config)
