@@ -35,11 +35,34 @@ export function generateComponentPreTests (config: IComponentsConfiguration): vo
   // TODO: write tests that check each getSchema() to ensure that all properties have a validator definition
 }
 
-export function createDirectory (filePath: string): void {
+function createDirectory (filePath: string): void {
   try {
     fs.mkdirSync(filePath)
   } catch (e: any) {
     if (e.code !== 'EEXIST') throw e
+  }
+}
+
+function determineISchemaType (property: IProperty, v: string, dependencies: Set<string>): string {
+  if (property.types.length === 1) {
+    const type = property.types[0]
+    if (type.isComponent) {
+      const definition = `I${type.type}${v}Definition`
+      const built = `I${type.type}${v}`
+      dependencies.add(definition)
+      dependencies.add(built)
+      return `ISchema.IComponent<${definition}, ${built}>`
+    }
+    switch (type.type) {
+      case 'array': return 'ISchema.IArray<any>'
+      case 'boolean': return 'ISchema.IBoolean'
+      case 'number': return 'ISchema.INumber'
+      case 'object': return 'ISchema.IObject'
+      case 'string': return 'ISchema.IString'
+      default: return 'any'
+    }
+  } else {
+    return 'ISchema.IOneOf'
   }
 }
 
@@ -72,7 +95,7 @@ function generateInterfaceFileContent (component: IProcessedComponentConfigurati
     component.joinedDependencies[type]
       .map(v => v.substring(1))
       .forEach(v => {
-        deps.push(`I${type}${v}`, `I${type}Definition${v}`)
+        deps.push(`I${type}${v}`, `I${type}${v}Definition`)
       })
     result += `import { ${deps.join(', ')} } from '../${type}/I${type}'` + EOL
   })
@@ -90,7 +113,7 @@ function generateInterfaceFileContent (component: IProcessedComponentConfigurati
 
     ;['definition', 'built'].forEach(set => {
       if (set === 'definition') {
-        result += `export interface I${name}Definition${major} {` + EOL
+        result += `export interface I${name}${major}Definition {` + EOL
       } else {
         result += `export interface I${name}${major} extends IComponentInstance {` + EOL
       }
@@ -146,9 +169,9 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
 
   result += EOL
   if (schemaIsCacheable) {
-    dependencies.add(`I${name}Definition${v}`)
+    dependencies.add(`I${name}${v}Definition`)
     dependencies.add(`I${name}${v}`)
-    result += `let cachedSchema: ISchema.IDefinition<I${name}Definition${v}, I${name}${v}> | null = null` + EOL + EOL
+    result += `let cachedSchema: ISchema.IDefinition<I${name}${v}Definition, I${name}${v}> | null = null` + EOL + EOL
   }
 
   result += generateReplaceableSection('HEADER', '') + EOL
@@ -174,7 +197,7 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
   })
   if (props.length > 0) result += EOL
 
-  result += `  constructor (definition: I${name}Definition${v}, version?: IVersion) {` + EOL
+  result += `  constructor (definition: I${name}${v}Definition, version?: IVersion) {` + EOL
   result += '    super(definition, version, arguments[2])' + EOL
   result += '  }' + EOL + EOL
 
@@ -208,7 +231,7 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
   }
   result += '  }' + EOL + EOL
 
-  result += `  static getSchema (data: ISchemaProcessor): ISchema.IDefinition<I${name}Definition${v}, I${name}${v}> {` + EOL
+  result += `  static getSchema (data: ISchemaProcessor): ISchema.IDefinition<I${name}${v}Definition, I${name}${v}> {` + EOL
   if (schemaIsCacheable) {
     result += '    if (cachedSchema !== null) {' + EOL
     result += '      return cachedSchema' + EOL
@@ -229,18 +252,16 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
       result += '    error: () => {}' + EOL
       result += '  }' + EOL
     } else {
-      result += `    const additionalProperties: ISchema.ISchema = ` +
+      result += `    const additionalProperties: ${determineISchemaType(additionalProperties, v, dependencies)} = ` +
         generateGetSchemaPropertySchema(additionalProperties.types[0], additionalProperties, '    ', v, dependencies) + EOL + EOL
     }
   }
   props.forEach(key => {
     const property = component[version]?.properties?.[key] as IProperty
-    const types = property.types
-      .map(t => t.isComponent ? `I${t.name}${v}|I${t.name}Definition${v}` : t.type)
-      .join('|')
-    result += `    const ${getVarName(key)}: ISchema.IProperty = ` + generateGetSchemaProperty(property, '    ', v, dependencies) + EOL + EOL
+    result += `    const ${getVarName(key)}: ISchema.IProperty<${determineISchemaType(property, v, dependencies)}> = ` +
+      generateGetSchemaProperty(property, '    ', v, dependencies) + EOL + EOL
   })
-  result += `    const schema: ISchema.IDefinition<I${name}Definition${v}, I${name}${v}> = {` + EOL
+  result += `    const schema: ISchema.IDefinition<I${name}${v}Definition, I${name}${v}> = {` + EOL
   result += "      type: 'object'," + EOL
   result += `      allowsSchemaExtensions: ${String(allowsExtensions)}`
   if (additionalProperties !== undefined) {
@@ -263,7 +284,7 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
   result += '    return schema' + EOL
   result += '  }' + EOL + EOL
 
-  result += `  static validate (definition: I${name}Definition${v}, version?: IVersion): ExceptionStore {` + EOL
+  result += `  static validate (definition: I${name}${v}Definition, version?: IVersion): ExceptionStore {` + EOL
   result += '    return super.validate(definition, version, arguments[2])' + EOL
   result += '  }' + EOL + EOL
 
@@ -288,7 +309,7 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
 function generatePropertyTypes (property: IProperty, suffix: string, isDefinition: boolean, dependencies?: Set<string>): string {
   const types = property.types.map(type => {
     const dependency = type.isComponent
-      ? isDefinition ? `I${type.type}Definition${suffix}` : `I${type.type}${suffix}`
+      ? isDefinition ? `I${type.type}${suffix}Definition` : `I${type.type}${suffix}`
       : type.type
     if (type.isComponent && dependencies !== undefined) {
       dependencies.add(dependency)
@@ -488,15 +509,14 @@ function parsePropertyType (key: string, type: string): IProperty | null {
 
   const refAllowed = types.find(t => t.isComponent && t.name === 'Reference') !== undefined
 
-  const result: IProperty = {
+  return {
     refAllowed,
     key,
     isArray,
     isMap,
     required: isRequired,
     types: types.filter(t => !(t.isComponent && t.name === 'Reference'))
-  }
-  return result
+  } as IProperty
 }
 
 export function ucFirst (value: string): string {
