@@ -100,10 +100,10 @@ const config: IComponentsConfiguration = {
       allowsExtensions: true,
       properties: {
         description: 'string',
-        type: "'array'|'boolean'|'integer'|'number'|'string'!",
+        type: "='array'|'boolean'|'integer'|'number'|'string'!",
         format: 'string',
         items: 'Items',
-        collectionFormat: "'csv'|'ssv'|'tsv'|'pipes'",
+        collectionFormat: "='csv'|'ssv'|'tsv'|'pipes'",
         default: 'any',
         maximum: 'number',
         exclusiveMaximum: 'number',
@@ -126,7 +126,7 @@ const config: IComponentsConfiguration = {
         required: 'boolean',
         deprecated: 'boolean',
         allowEmptyValue: 'boolean',
-        style: "'simple'",
+        style: "='simple'",
         explode: 'boolean',
         allowReserved: 'boolean',
         schema: 'Schema|Reference',
@@ -164,10 +164,10 @@ const config: IComponentsConfiguration = {
     v2: {
       allowsExtensions: true,
       properties: {
-        type: "'array'|'boolean'|'integer'|'number'|'string'!",
+        type: "='array'|'boolean'|'integer'|'number'|'string'!",
         format: 'string',
         items: 'Items',
-        collectionFormat: "'csv'|'ssv'|'tsv'|'pipes'",
+        collectionFormat: "='csv'|'ssv'|'tsv'|'pipes'",
         default: 'any',
         maximum: 'number',
         exclusiveMaximum: 'boolean',
@@ -302,15 +302,15 @@ const config: IComponentsConfiguration = {
       allowsExtensions: true,
       properties: {
         name: 'string!',
-        in: "'body'|'formData'|'header'|'path'|'query'!",
+        in: "='body'|'formData'|'header'|'path'|'query'!",
         description: 'string',
         required: 'boolean',
         schema: 'Schema',
-        type: "'array'|'boolean'|'file'|'integer'|'number'|'string'",
+        type: "='array'|'boolean'|'file'|'integer'|'number'|'string'",
         format: 'string',
         allowEmptyValue: 'boolean',
         items: 'Items',
-        collectionFormat: "'csv'|'ssv'|'tsv'|'pipes'|'multi'",
+        collectionFormat: "='csv'|'ssv'|'tsv'|'pipes'|'multi'",
         default: 'any',
         maximum: 'number',
         exclusiveMaximum: 'boolean',
@@ -330,12 +330,12 @@ const config: IComponentsConfiguration = {
       allowsExtensions: true,
       properties: {
         name: 'string!',
-        in: "'cookie'|'header'|'path'|'query'!",
+        in: "='cookie'|'header'|'path'|'query'!",
         description: 'string',
         required: 'boolean',
         deprecated: 'boolean',
         allowEmptyValue: 'boolean',
-        style: "'deepObject'|'form'|'label'|'matrix'|'pipeDelimited'|'simple'|'spaceDelimited'",
+        style: "='deepObject'|'form'|'label'|'matrix'|'pipeDelimited'|'simple'|'spaceDelimited'",
         explode: 'boolean',
         allowReserved: 'boolean',
         schema: 'Schema|Reference',
@@ -548,8 +548,8 @@ const config: IComponentsConfiguration = {
         type: '"basic"|"apiKey"|"oauth2"!',
         description: 'string',
         name: 'string',
-        in: '"query"|"header"',
-        flow: '"implicit"|"password"|"application"|"accessCode"',
+        in: "='query'|'header'",
+        flow: "='implicit'|'password'|'application'|'accessCode'",
         authorizationUrl: 'string',
         tokenUrl: 'string',
         scopes: 'string{}'
@@ -558,10 +558,10 @@ const config: IComponentsConfiguration = {
     v3: {
       allowsExtensions: true,
       properties: {
-        type: "'apiKey'|'http'|'oauth2'|'openIdConnect'",
+        type: "='apiKey'|'http'|'oauth2'|'openIdConnect'",
         description: 'string',
         name: 'string',
-        in: "'query'|'header'|'cookie'",
+        in: "='query'|'header'|'cookie'",
         scheme: 'string',
         bearerFormat: 'string',
         flows: 'OAuthFlows',
@@ -593,7 +593,7 @@ const config: IComponentsConfiguration = {
     v2: {
       allowsExtensions: true,
       properties: {
-        swagger: "'2.0'!",
+        swagger: "='2.0'!",
         info: 'Info!',
         host: 'string',
         basePath: 'string',
@@ -654,4 +654,4 @@ const config: IComponentsConfiguration = {
 }
 
 generateComponents(path.resolve(__dirname, '../temp'), config)
-generateComponents('C:\\Users\\james\\Documents\\Code\\openapi-enforcer-v2.5\\src\\components', config)
+generateComponents('C:\\Users\\james\\Documents\\Code\\openapi-enforcer\\src\\components', config)

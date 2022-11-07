@@ -41,10 +41,12 @@ export interface IProperty {
   isMap: boolean
   required: boolean
   types: IPropertyType[]
+  enum: string[]
 }
 
 export interface IPropertyType {
   isComponent: boolean
   type: string
   name?: string // component name if is component
+  enum?: string[]
 }

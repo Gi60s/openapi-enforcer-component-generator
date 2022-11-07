@@ -167,14 +167,13 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
   result += "import { ISchemaProcessor } from '../ISchemaProcessor'" + EOL
   result += "<<COMPONENT_DEPENDENCIES>>"
 
-  result += EOL
+  result += generateReplaceableSection('HEADER', '') + EOL
+
   if (schemaIsCacheable) {
     dependencies.add(`I${name}${v}Definition`)
     dependencies.add(`I${name}${v}`)
     result += `let cachedSchema: ISchema.IDefinition<I${name}${v}Definition, I${name}${v}> | null = null` + EOL + EOL
   }
-
-  result += generateReplaceableSection('HEADER', '') + EOL
 
   // class
   result += `export class ${name} extends EnforcerComponent implements I${name}${v} {` + EOL
@@ -292,7 +291,7 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
 
   result += '}' + EOL + EOL
 
-  result += generateReplaceableSection('FOOTER', '') + EOL
+  result += generateReplaceableSection('FOOTER', '')
 
   if (dependencies.size > 0) {
     const items = Array.from(dependencies)
@@ -364,14 +363,24 @@ function generateGetSchemaProperty (property: IProperty, indent: string, v: stri
 
 function generateGetSchemaPropertySchema (type: IPropertyType, property: IProperty, indent: string, v: string, dependencies: Set<string>): string {
   const next = EOL + indent
+  const hasEnum = property.enum.length > 0
   let result = '{' + next
-  result += `  type: '${type.isComponent ? 'component' : type.type}'`
+  let t = type.isComponent ? 'component' : type.type
+
+  if (hasEnum) {
+    t = 'string'
+  }
+
+  result += `  type: '${t}'`
   if (type.isComponent) {
     const dependency = `${type.name!}${v}`
     result += ',' + next
     result += `  allowsRef: ${String(property.refAllowed)},` + next
     result += `  component: ${dependency}` + next
     dependencies.add(dependency)
+  } else if (hasEnum) {
+    result += ',' + next
+    result += `  enum: ['${property.enum.join("', '")}']` + next
   } else {
     result += next
   }
@@ -483,6 +492,8 @@ function parsePropertyType (key: string, type: string): IProperty | null {
   let isArray = false
   let isMap = false
   let isRequired = false
+  let isExact = false
+  let enums: string[] = []
 
   if (type.endsWith('!')) {
     isRequired = true
@@ -496,16 +507,29 @@ function parsePropertyType (key: string, type: string): IProperty | null {
     isMap = true
     type = type.substring(0, type.length - 2)
   }
+  if (type.startsWith('=')) {
+    isExact = true
+    type = type.substring(1)
+    enums = type
+      .split('|')
+      .map(v => v.substring(1, v.length - 1))
+  }
 
-  const types = type
-    .split('|')
-    .map(t => {
-      return {
-        isComponent: /^[A-Z]/.test(t),
-        name: ucFirst(t.replace(/ +([a-z])/g, function (g) { return g[1].toUpperCase() })),
-        type: t
-      }
-    })
+  const types = isExact
+    ? [{
+      isComponent: false,
+      name: '',
+      type: type
+    }]
+    : type
+      .split('|')
+      .map(t => {
+        return {
+          isComponent: /^[A-Z]/.test(t),
+          name: ucFirst(t.replace(/ +([a-z])/g, function (g) { return g[1].toUpperCase() })),
+          type: t
+        }
+      })
 
   const refAllowed = types.find(t => t.isComponent && t.name === 'Reference') !== undefined
 
@@ -515,7 +539,8 @@ function parsePropertyType (key: string, type: string): IProperty | null {
     isArray,
     isMap,
     required: isRequired,
-    types: types.filter(t => !(t.isComponent && t.name === 'Reference'))
+    types: types.filter(t => !(t.isComponent && t.name === 'Reference')),
+    enum: enums
   } as IProperty
 }
 
