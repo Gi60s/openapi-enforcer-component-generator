@@ -46,20 +46,42 @@ function createDirectory (filePath: string): void {
 function determineISchemaType (property: IProperty, v: string, dependencies: Set<string>): string {
   if (property.types.length === 1) {
     const type = property.types[0]
+    let t: string = 'any'
+
     if (type.isComponent) {
       const definition = `I${type.type}${v}Definition`
       const built = `I${type.type}${v}`
       dependencies.add(definition)
       dependencies.add(built)
-      return `ISchema.IComponent<${definition}, ${built}>`
+      t = `ISchema.IComponent<${definition}, ${built}>`
+    } else if (property.enum.length > 0) {
+      t = 'ISchema.IString'
+    } else {
+      switch (type.type) {
+        case 'array':
+          t = 'ISchema.IArray<any>'
+          break
+        case 'boolean':
+          t = 'ISchema.IBoolean'
+          break
+        case 'number':
+          t ='ISchema.INumber'
+          break
+        case 'object':
+          t ='ISchema.IObject'
+          break
+        case 'string':
+          t ='ISchema.IString'
+          break
+      }
     }
-    switch (type.type) {
-      case 'array': return 'ISchema.IArray<any>'
-      case 'boolean': return 'ISchema.IBoolean'
-      case 'number': return 'ISchema.INumber'
-      case 'object': return 'ISchema.IObject'
-      case 'string': return 'ISchema.IString'
-      default: return 'any'
+
+    if (property.isArray) {
+      return `ISchema.IArray<${t}>`
+    } else if (property.isMap) {
+      return `ISchema.IObject<${t}>`
+    } else {
+      return t
     }
   } else {
     return 'ISchema.IOneOf'
@@ -365,25 +387,40 @@ function generateGetSchemaPropertySchema (type: IPropertyType, property: IProper
   const next = EOL + indent
   const hasEnum = property.enum.length > 0
   let result = '{' + next
-  let t = type.isComponent ? 'component' : type.type
 
-  if (hasEnum) {
-    t = 'string'
-  }
-
-  result += `  type: '${t}'`
+  const typeArray: string[] = []
   if (type.isComponent) {
     const dependency = `${type.name!}${v}`
-    result += ',' + next
-    result += `  allowsRef: ${String(property.refAllowed)},` + next
-    result += `  component: ${dependency}` + next
+    typeArray.push(
+      "type: 'component'",
+      `allowsRef: ${String(property.refAllowed)}`,
+      `component: ${dependency}`
+    )
     dependencies.add(dependency)
-  } else if (hasEnum) {
-    result += ',' + next
-    result += `  enum: ['${property.enum.join("', '")}']` + next
   } else {
-    result += next
+    typeArray.push(`type: '${type.type}'`)
   }
+
+  if (hasEnum) {
+    result += "  type: 'string'," + next
+    result += `  enum: ['${property.enum.join("', '")}']` + next
+
+  } else if (property.isArray) {
+    result += "  type: 'array',"
+    result += '  items: {' + next
+    result += '    ' + typeArray.join(',    ' + next) + next
+    result += '  }' + next
+
+  } else if (property.isMap) {
+    result += "  type: 'object'," + next
+    result += '  additionalProperties: {' + next
+    result += '    ' + typeArray.join(',' + next + '    ') + next
+    result += '  }' + next
+
+  } else {
+    result += '  ' + typeArray.join(',' + next + '  ') + next
+  }
+
   result += '}'
   return result
 }
