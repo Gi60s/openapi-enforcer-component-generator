@@ -49,8 +49,9 @@ function determineISchemaType (property: IProperty, v: string, dependencies: Set
     let t: string = 'any'
 
     if (type.isComponent) {
-      const definition = `I${type.type}${v}Definition`
-      const built = `I${type.type}${v}`
+      const name = getNameCamelCase(type.type)
+      const definition = `I${name}${v}Definition`
+      const built = `I${name}${v}`
       dependencies.add(definition)
       dependencies.add(built)
       t = `ISchema.IComponent<${definition}, ${built}>`
@@ -112,15 +113,36 @@ function generateInterfaceFileContent (component: IProcessedComponentConfigurati
 
   // imports
   result += "import { IComponentInstance } from '../IComponent'" + EOL
+  const dependencies = new Set<string>()
   Object.keys(component.joinedDependencies).forEach(type => {
-    const deps: string[] = []
     component.joinedDependencies[type]
       .map(v => v.substring(1))
       .forEach(v => {
-        deps.push(`I${type}${v}`, `I${type}${v}Definition`)
+        const name = getNameCamelCase(type)
+        if (name !== component.name) {
+          dependencies.add(`I${name}${v}`)
+          dependencies.add(`I${name}${v}Definition`)
+        }
       })
-    result += `import { ${deps.join(', ')} } from '../${type}/I${type}'` + EOL
   })
+
+  if (dependencies.size > 0) {
+    const deps = Array.from(dependencies)
+    deps.sort()
+    result += 'import {' + EOL
+    result += '  ' + deps.join(',' + EOL + '  ') + EOL
+    result += "} from '../'" + EOL
+  }
+
+  // Object.keys(component.joinedDependencies).forEach(type => {
+  //   const deps: string[] = []
+  //   component.joinedDependencies[type]
+  //     .map(v => v.substring(1))
+  //     .forEach(v => {
+  //       deps.push(`I${type}${v}`, `I${type}${v}Definition`)
+  //     })
+  //   result += `import { ${deps.join(', ')} } from '../${type}/I${type}'` + EOL
+  // })
   result += EOL
 
   component.versions.forEach(v => {
@@ -161,7 +183,7 @@ function generateInterfaceFileContent (component: IProcessedComponentConfigurati
         })
       }
 
-      result += '}' + EOL + EOL
+      result += '}' + EOL
     })
   })
 
@@ -330,7 +352,7 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
 function generatePropertyTypes (property: IProperty, suffix: string, isDefinition: boolean, dependencies?: Set<string>): string {
   const types = property.types.map(type => {
     const dependency = type.isComponent
-      ? isDefinition ? `I${type.type}${suffix}Definition` : `I${type.type}${suffix}`
+      ? isDefinition ? `I${getNameCamelCase(type.type)}${suffix}Definition` : `I${getNameCamelCase(type.type)}${suffix}`
       : type.type
     if (type.isComponent && dependencies !== undefined) {
       dependencies.add(dependency)
@@ -390,7 +412,7 @@ function generateGetSchemaPropertySchema (type: IPropertyType, property: IProper
 
   const typeArray: string[] = []
   if (type.isComponent) {
-    const dependency = `${type.name!}${v}`
+    const dependency = `${getNameCamelCase(type.name!)}${v}`
     typeArray.push(
       "type: 'component'",
       `allowsRef: ${String(property.refAllowed)}`,
@@ -425,16 +447,6 @@ function generateGetSchemaPropertySchema (type: IPropertyType, property: IProper
   return result
 }
 
-function getVarName (name: string): string {
-  switch (name) {
-    case 'default':
-    case 'enum':
-      return '_' + name
-    default:
-      return name
-  }
-}
-
 function generateWarning (): string {
   return [
     '/*',
@@ -452,12 +464,27 @@ function generateWarning (): string {
   ].join(EOL) + EOL + EOL
 }
 
+function getNameCamelCase (name: string): string {
+  return ucFirst(name.replace(/ +([a-z])/gi, function (g) { return g[1].toUpperCase() }))
+}
+
+function getVarName (name: string): string {
+  switch (name) {
+    case 'default':
+    case 'enum':
+    case 'in':
+      return '_' + name
+    default:
+      return name
+  }
+}
+
 function processConfiguration (config: IComponentsConfiguration): IProcessedConfiguration {
   const result: IProcessedConfiguration = {}
 
   Object.keys(config).forEach(fullName => {
     const component = config[fullName]
-    const name = ucFirst(fullName.replace(/ ([a-z])/gi, function (g) { return g[1].toUpperCase() }))
+    const name = getNameCamelCase(fullName)
     const reference = fullName.replace(/ /g, '-').toLowerCase()
 
     const dependencies: Record<string, string[]> = {}
@@ -581,11 +608,11 @@ function parsePropertyType (key: string, type: string): IProperty | null {
   } as IProperty
 }
 
-export function ucFirst (value: string): string {
+function ucFirst (value: string): string {
   return value[0].toUpperCase() + value.substring(1)
 }
 
-export function updateFile (filePath: string, content: string): void {
+function updateFile (filePath: string, content: string): void {
   let existingContent: string = ''
   try {
     existingContent = fs.readFileSync(filePath, 'utf8')

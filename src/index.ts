@@ -545,7 +545,7 @@ const config: IComponentsConfiguration = {
     v2: {
       allowsExtensions: true,
       properties: {
-        type: '"basic"|"apiKey"|"oauth2"!',
+        type: "='basic'|'apiKey'|'oauth2'!",
         description: 'string',
         name: 'string',
         in: "='query'|'header'",
