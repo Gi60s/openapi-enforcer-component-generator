@@ -6,7 +6,16 @@ const config: IComponentsConfiguration = {
   Callback: {
     v3: {
       allowsExtensions: true,
-      additionalProperties: 'PathItem',
+      additionalProperties: [
+        {
+          type: 'PathItem',
+          keyPattern: '`http${string}`'
+        },
+        {
+          type: 'PathItem',
+          keyPattern: '`{$${string}`'
+        }
+      ]
     }
   },
   Components: {
@@ -67,7 +76,9 @@ const config: IComponentsConfiguration = {
   Example: {
     v2: {
       allowsExtensions: false,
-      additionalProperties: 'any'
+      additionalProperties: [
+        { type: 'any' }
+      ]
     },
     v3: {
       allowsExtensions: true,
@@ -274,7 +285,7 @@ const config: IComponentsConfiguration = {
         produces: 'string[]',
         parameters: 'Parameter|Reference[]',
         responses: 'Responses!',
-        schemes: 'string[]',
+        schemes: "='http'|'https'|'ws'|'wss'[]",
         deprecated: 'boolean',
         security: 'SecurityRequirement[]'
       }
@@ -382,13 +393,21 @@ const config: IComponentsConfiguration = {
   Paths: {
     v2: {
       allowsExtensions: true,
-      additionalProperties: 'Path',
-      additionalPropertiesKeyPattern: '`/${string}`'
+      additionalProperties: [
+        {
+          type: 'PathItem',
+          keyPattern: '`/${string}`'
+        }
+      ]
     },
     v3: {
       allowsExtensions: true,
-      additionalProperties: 'Path',
-      additionalPropertiesKeyPattern: '`/${string}`'
+      additionalProperties: [
+        {
+          type: 'PathItem',
+          keyPattern: '`/${string}`'
+        }
+      ]
     }
   },
   Reference: {
@@ -438,16 +457,24 @@ const config: IComponentsConfiguration = {
   Responses: {
     v2: {
       allowsExtensions: true,
-      additionalProperties: 'Response|Reference',
-      additionalPropertiesKeyPattern: 'number',
+      additionalProperties: [
+        {
+          type: 'Response|Reference',
+          keyPattern: 'number'
+        }
+      ],
       properties: {
         default: 'Response|Reference'
       }
     },
     v3: {
       allowsExtensions: true,
-      additionalProperties: 'Response|Reference',
-      additionalPropertiesKeyPattern: 'number',
+      additionalProperties: [
+        {
+          type: 'Response|Reference',
+          keyPattern: 'number'
+        }
+      ],
       properties: {
         default: 'Response|Reference'
       }
@@ -485,7 +512,7 @@ const config: IComponentsConfiguration = {
         discriminator: 'string',
         readOnly: 'boolean',
         xml: 'Xml',
-        externalDocs: 'ExternalDocs',
+        externalDocs: 'ExternalDocumentation',
         example: 'any'
       }
     },
@@ -534,11 +561,15 @@ const config: IComponentsConfiguration = {
   'Security Requirement': {
     v2: {
       allowsExtensions: false,
-      additionalProperties: 'string[]'
+      additionalProperties: [
+        { type: 'string[]' }
+      ]
     },
     v3: {
       allowsExtensions: false,
-      additionalProperties: 'string[]'
+      additionalProperties: [
+        { type: 'string[]' }
+      ]
     }
   },
   'Security Scheme': {
@@ -597,7 +628,7 @@ const config: IComponentsConfiguration = {
         info: 'Info!',
         host: 'string',
         basePath: 'string',
-        schemes: 'string[]',
+        schemes: "='http'|'https'|'ws'|'wss'[]",
         consumes: 'string[]',
         produces: 'string[]',
         paths: 'Paths!',

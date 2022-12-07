@@ -6,8 +6,10 @@ export type IComponentConfiguration = Partial<Record<IComponentConfigurationVers
 
 export interface IComponentVersionConfiguration {
   allowsExtensions: boolean
-  additionalProperties?: string
-  additionalPropertiesKeyPattern?: string
+  additionalProperties?: Array<{
+    type: string,
+    keyPattern?: string
+  }>
   properties?: Record<string, string>
   schemaIsCacheable?: boolean
 }
@@ -27,8 +29,10 @@ export interface IProcessedComponentConfiguration {
 
 export interface IProcessedComponentVersionConfiguration {
   allowsExtensions: boolean
-  additionalProperties?: IProperty
-  additionalPropertiesKeyPattern: string
+  additionalProperties?: Array<{
+    type: IProperty,
+    keyPattern: string
+  }>
   properties?: Record<string, IProperty>
   dependencies: string[]
   schemaIsCacheable: boolean

@@ -15,6 +15,7 @@ export function generateComponents (componentsDirectory: string, config: ICompon
   const data = processConfiguration(config)
 
   updateFile(path.resolve(componentsDirectory, 'index.ts'), generateComponentsIndexFileContent(data))
+  updateFile(path.resolve(componentsDirectory, 'IInternalTypes.ts'), generateInternalTypesFileContent(data))
 
   Object.keys(data).forEach(fullName => {
     const component = data[fullName]
@@ -125,7 +126,6 @@ function generateInterfaceFileContent (component: IProcessedComponentConfigurati
         }
       })
   })
-
   if (dependencies.size > 0) {
     const deps = Array.from(dependencies)
     deps.sort()
@@ -134,23 +134,17 @@ function generateInterfaceFileContent (component: IProcessedComponentConfigurati
     result += "} from '../'" + EOL
   }
 
-  // Object.keys(component.joinedDependencies).forEach(type => {
-  //   const deps: string[] = []
-  //   component.joinedDependencies[type]
-  //     .map(v => v.substring(1))
-  //     .forEach(v => {
-  //       deps.push(`I${type}${v}`, `I${type}${v}Definition`)
-  //     })
-  //   result += `import { ${deps.join(', ')} } from '../${type}/I${type}'` + EOL
-  // })
-  result += EOL
+  result += generateReplaceableSection('HEADER', '') + EOL
+
+  result += `interface I${component.name}Component extends IComponentInstance {` + EOL
+  result += generateReplaceableSection('COMPONENT_SHARED_PROPERTIES', '  ')
+  result += '}' + EOL + EOL
 
   component.versions.forEach(v => {
     const name = component.name
     const major = v.substring(1)
     const {
         additionalProperties,
-        additionalPropertiesKeyPattern: keyPattern,
         allowsExtensions,
         properties
       } = component[v] as IProcessedComponentVersionConfiguration
@@ -159,7 +153,7 @@ function generateInterfaceFileContent (component: IProcessedComponentConfigurati
       if (set === 'definition') {
         result += `export interface I${name}${major}Definition {` + EOL
       } else {
-        result += `export interface I${name}${major} extends IComponentInstance {` + EOL
+        result += `export interface I${name}${major} extends I${name}Component {` + EOL
       }
 
       if (allowsExtensions) {
@@ -168,8 +162,10 @@ function generateInterfaceFileContent (component: IProcessedComponentConfigurati
       }
 
       if (additionalProperties !== undefined) {
-        result += `  [key: ${keyPattern}]: `
-        result += generatePropertyTypes(additionalProperties, major, set === 'definition') + EOL
+        additionalProperties.forEach(property => {
+          result += `  [key: ${property.keyPattern}]: `
+          result += generatePropertyTypes(property.type, major, set === 'definition') + EOL
+        })
       }
 
       if (properties !== undefined) {
@@ -183,9 +179,41 @@ function generateInterfaceFileContent (component: IProcessedComponentConfigurati
         })
       }
 
-      result += '}' + EOL
+      result += '}' + EOL + EOL
     })
   })
+
+  result += generateReplaceableSection('FOOTER', '')
+
+  return generateWarning() + result
+}
+
+function generateInternalTypesFileContent (configuration: IProcessedConfiguration): string {
+  const components: string[] = []
+  const definitions: string[] = []
+  let result = `import * as I from './'` + EOL + EOL
+  result += `import { ISchemaProcessor } from '../ComponentSchemaDefinition/ISchemaProcessor'` + EOL
+
+  Object.keys(configuration).forEach(fullName => {
+    const component = configuration[fullName]
+    const name = component.name
+    const versions = component.versions
+    result += `export type I${name} = ${versions.map(v => 'I.I' + name + v.substring(1)).join(' | ')}` + EOL
+    result += `export type I${name}Definition = ${versions.map(v => 'I.I' + name + v.substring(1) + 'Definition').join(' | ')}` + EOL
+    result += `export type I${name}SchemaProcessor = ` + versions.map(version => {
+      const v = version.substring(1)
+      return `ISchemaProcessor<I${name}Definition, I${name}>`
+    }).join(' | ') + EOL
+
+
+    components.push('I' + name)
+    definitions.push('I' + name + 'Definition')
+  })
+
+  result += EOL
+  result += 'export type IComponent =' + EOL + components.join(' |' + EOL) + EOL + EOL
+  result += 'export type IDefinition =' + EOL + definitions.join(' |' + EOL) + EOL
+
 
   return generateWarning() + result
 }
@@ -196,19 +224,19 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
   const dependencies = new Set<string>()
   const {
     additionalProperties,
-    additionalPropertiesKeyPattern: keyPattern,
     allowsExtensions,
     // dependencies,
     properties,
     schemaIsCacheable
   } = component[version] as IProcessedComponentVersionConfiguration
+  const props = Object.keys(properties ?? {})
 
   // imports
   let result = "import { IComponentSpec, IVersion } from '../IComponent'" + EOL
   result += "import { EnforcerComponent } from '../Component'" + EOL
   result += "import { ExceptionStore } from '../../Exception/ExceptionStore'" + EOL
-  result += `import * as ISchema from '../IComponentSchema'` + EOL
-  result += "import { ISchemaProcessor } from '../ISchemaProcessor'" + EOL
+  result += `import * as ISchema from '../../ComponentSchemaDefinition/IComponentSchemaDefinition'` + EOL
+  result += `import { I${name}SchemaProcessor } from '../IInternalTypes'` + EOL
   result += "<<COMPONENT_DEPENDENCIES>>"
 
   result += generateReplaceableSection('HEADER', '') + EOL
@@ -216,30 +244,81 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
   if (schemaIsCacheable) {
     dependencies.add(`I${name}${v}Definition`)
     dependencies.add(`I${name}${v}`)
-    result += `let cachedSchema: ISchema.IDefinition<I${name}${v}Definition, I${name}${v}> | null = null` + EOL + EOL
+    result += `let cachedSchema: ISchema.ISchemaDefinition<I${name}${v}Definition, I${name}${v}> | null = null` + EOL + EOL
   }
 
-  // class
-  result += `export class ${name} extends EnforcerComponent implements I${name}${v} {` + EOL
-  if (allowsExtensions) {
-    // eslint-disable-next-line no-template-curly-in-string
-    result += '  [extension: `x-${string}`]: any' + EOL
+  if (props.length > 0) {
+    result += 'interface IValidatorsMap {' + EOL
+    props.forEach(key => {
+      const property = component[version]?.properties?.[key] as IProperty
+      result += `  ${getVarName(key)}: ISchema.IProperty<${determineISchemaType(property, v, dependencies)}>` + EOL
+    })
+    result += '}' + EOL + EOL
+
+    result += `const validators: IValidatorsMap = {` + EOL
+    props.forEach((key, i) => {
+      const property = component[version]?.properties?.[key] as IProperty
+      result += `  ${getVarName(key)}: ` +
+        generateGetSchemaProperty(property, '  ', v, dependencies)
+      if (i < props.length - 1) result += ','
+      result += EOL
+    })
+    result += '}' + EOL + EOL
   }
 
   if (additionalProperties !== undefined) {
-    result += `  [key: ${keyPattern}]: `
-    result += generatePropertyTypes(additionalProperties, v, false, dependencies) + EOL
+    const types: IPropertyType[] = []
+    const propertyMap = new Map<IPropertyType, IProperty>()
+    additionalProperties.forEach(property => {
+      property.type.types.forEach(type => {
+        const match = types.find(t => t.isComponent === type.isComponent && t.type === type.type && t.name === type.name)
+        if (match === undefined) {
+          types.push(type)
+          propertyMap.set(type, property.type)
+        }
+      })
+    })
+    if (types.length > 1) {
+      result += `const additionalProperties: ISchema.IOneOf = {` + EOL
+      result += "  type: 'oneOf'," + EOL
+      result += '  oneOf: [' + EOL
+      types.forEach((type, index) => {
+        const property = propertyMap.get(type) as IProperty
+        result += '    {' + EOL
+        result += '      condition: () => ' + (index === 0 ? 'true' : 'false') + ',' + EOL
+        result += '      schema: ' + generateGetSchemaPropertySchema(type, property, '          ', v, dependencies) + EOL
+        result += '    }' + (index + 1 < types.length ? ',' : '') + EOL
+      })
+      result += '  ],' + EOL
+      result += '  error: () => {}' + EOL
+      result += '}' + EOL
+    } else {
+      const type = types[0]
+      const property = propertyMap.get(type) as IProperty
+      result += `const additionalProperties: ${determineISchemaType(property, v, dependencies)} = ` +
+        generateGetSchemaPropertySchema(type, property, '', v, dependencies) + EOL + EOL
+    }
   }
 
-  const props = Object.keys(properties ?? {})
-  props.forEach(key => {
-    const property = component[version]?.properties?.[key] as IProperty
-    const conditional = property.required ? '!' : '?'
-    result += `  ${key}${conditional}: `
-    result += generatePropertyTypes(property, v, false, dependencies) + EOL
-  })
-  if (props.length > 0) result += EOL
+  // class
+  result += `export class ${name} extends EnforcerComponent<I${name}${v}Definition, I${name}${v}> implements I${name}${v} {` + EOL
+  if (allowsExtensions) {
+    // eslint-disable-next-line no-template-curly-in-string
+    result += '  [extension: `x${string}`]: any' + EOL
+  }
 
+  if (additionalProperties !== undefined) {
+    additionalProperties.forEach(property => {
+      result += `  [key: ${property.keyPattern}]: `
+      result += generatePropertyTypes(property.type, v, false, dependencies)
+      if (allowsExtensions && property.keyPattern === 'string') {
+        result += ' | any'
+      }
+      result += EOL
+    })
+  }
+
+  if (props.length > 0 || additionalProperties !== undefined || allowsExtensions) result += EOL
   result += `  constructor (definition: I${name}${v}Definition, version?: IVersion) {` + EOL
   result += '    super(definition, version, arguments[2])' + EOL
   result += '  }' + EOL + EOL
@@ -274,37 +353,13 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
   }
   result += '  }' + EOL + EOL
 
-  result += `  static getSchema (data: ISchemaProcessor): ISchema.IDefinition<I${name}${v}Definition, I${name}${v}> {` + EOL
+  result += `  static getSchemaDefinition (_data: I${name}SchemaProcessor): ISchema.ISchemaDefinition<I${name}${v}Definition, I${name}${v}> {` + EOL
   if (schemaIsCacheable) {
     result += '    if (cachedSchema !== null) {' + EOL
     result += '      return cachedSchema' + EOL
     result += '    }' + EOL + EOL
   }
-  if (additionalProperties !== undefined) {
-    if (additionalProperties.types.length > 1) {
-      result += '  const additionalProperties: ISchema.IOneOf = {' + EOL
-      result += "    type: 'oneOf'," + EOL
-      result += '    oneOf: [' + EOL
-      additionalProperties.types.forEach((type, index) => {
-        result += '      {' + EOL
-        result += '        condition: () => ' + (index === 0 ? 'true' : 'false') + ',' + EOL
-        result += '        schema: ' + generateGetSchemaPropertySchema(type, additionalProperties, '          ', v, dependencies) + EOL
-        result += '      }' + (index + 1 < additionalProperties.types.length ? ',' : '') + EOL
-      })
-      result += '    ],' + EOL
-      result += '    error: () => {}' + EOL
-      result += '  }' + EOL
-    } else {
-      result += `    const additionalProperties: ${determineISchemaType(additionalProperties, v, dependencies)} = ` +
-        generateGetSchemaPropertySchema(additionalProperties.types[0], additionalProperties, '    ', v, dependencies) + EOL + EOL
-    }
-  }
-  props.forEach(key => {
-    const property = component[version]?.properties?.[key] as IProperty
-    result += `    const ${getVarName(key)}: ISchema.IProperty<${determineISchemaType(property, v, dependencies)}> = ` +
-      generateGetSchemaProperty(property, '    ', v, dependencies) + EOL + EOL
-  })
-  result += `    const schema: ISchema.IDefinition<I${name}${v}Definition, I${name}${v}> = {` + EOL
+  result += `    const result: ISchema.ISchemaDefinition<I${name}${v}Definition, I${name}${v}> = {` + EOL
   result += "      type: 'object'," + EOL
   result += `      allowsSchemaExtensions: ${String(allowsExtensions)}`
   if (additionalProperties !== undefined) {
@@ -314,7 +369,7 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
   if (props.length > 0) {
     result += ',' + EOL
     result += '      properties: [' + EOL
-    result += '        ' + props.map(getVarName).join(',' + EOL + '        ') + EOL
+    result += '        ' + props.map(k => `validators.${getVarName(k)}`).join(',' + EOL + '        ') + EOL
     result += '      ]'
   }
   result += EOL
@@ -322,14 +377,26 @@ function generateComponentContent (component: IProcessedComponentConfiguration, 
   result += EOL
   result += generateReplaceableSection('SCHEMA_DEFINITION', '    ') + EOL
   if (schemaIsCacheable) {
-    result += '    cachedSchema = schema' + EOL
+    result += '    cachedSchema = result' + EOL
   }
-  result += '    return schema' + EOL
+  result += '    return result' + EOL
   result += '  }' + EOL + EOL
 
   result += `  static validate (definition: I${name}${v}Definition, version?: IVersion): ExceptionStore {` + EOL
   result += '    return super.validate(definition, version, arguments[2])' + EOL
   result += '  }' + EOL + EOL
+
+  props.forEach(key => {
+    const property = component[version]?.properties?.[key] as IProperty
+    let types = generatePropertyTypes(property, v, false, dependencies)
+    if (!property.required) types += ' | undefined'
+    result += `  get ${key} (): ${types} {` + EOL
+    result += `    return this.getProperty('${key}')` + EOL
+    result += '  }' + EOL + EOL
+    result += `  set ${key} (value: ${types}) {` + EOL
+    result += `    this.setProperty('${key}', value)` + EOL
+    result += '  }' + EOL + EOL
+  })
 
   result += generateReplaceableSection('BODY', '  ')
 
@@ -360,6 +427,7 @@ function generatePropertyTypes (property: IProperty, suffix: string, isDefinitio
     return dependency
   })
   if (property.isArray) {
+    if (property.enum.length > 1) return `Array<'${property.enum.join("'|'")}'>`
     return types.length > 1
       ? 'Array<' + types.join(' | ') + '>'
       : types[0] + '[]'
@@ -372,7 +440,7 @@ function generatePropertyTypes (property: IProperty, suffix: string, isDefinitio
 
 function generateReplaceableSection (key: string, indent: string): string {
   return indent + '// <!# Custom Content Begin: ' + key + ' #!>' + EOL +
-    indent + EOL +
+    indent + '// Put your code here.' + EOL +
     indent + '// <!# Custom Content End: ' + key + ' #!>' + EOL
 }
 
@@ -419,18 +487,19 @@ function generateGetSchemaPropertySchema (type: IPropertyType, property: IProper
       `component: ${dependency}`
     )
     dependencies.add(dependency)
+  } else if (hasEnum) {
+    typeArray.push(
+      "type: 'string'",
+      `enum: ['${property.enum.join("', '")}']`
+    )
   } else {
     typeArray.push(`type: '${type.type}'`)
   }
 
-  if (hasEnum) {
-    result += "  type: 'string'," + next
-    result += `  enum: ['${property.enum.join("', '")}']` + next
-
-  } else if (property.isArray) {
-    result += "  type: 'array',"
+  if (property.isArray) {
+    result += "  type: 'array'," + next
     result += '  items: {' + next
-    result += '    ' + typeArray.join(',    ' + next) + next
+    result += '    ' + typeArray.join(',' + next + '    ') + next
     result += '  }' + next
 
   } else if (property.isMap) {
@@ -471,6 +540,7 @@ function getNameCamelCase (name: string): string {
 function getVarName (name: string): string {
   switch (name) {
     case 'default':
+    case 'delete':
     case 'enum':
     case 'in':
       return '_' + name
@@ -502,17 +572,26 @@ function processConfiguration (config: IComponentsConfiguration): IProcessedConf
         const definition = component[v] as IComponentVersionConfiguration
         const componentDependencies: string[] = []
 
-        const additionalProperties: IProperty | null = definition.additionalProperties !== undefined
-          ? parsePropertyType('', definition.additionalProperties)
-          : null
-        additionalProperties?.types
-          .filter(type => type.isComponent)
-          .forEach(type => {
-            const name = type.name as string
-            if (dependencies[name] === undefined) dependencies[name] = []
-            if (!dependencies[name].includes(v)) dependencies[name].push(v)
-            componentDependencies.push(name)
-          })
+        const additionalProperties: Array<{ type: IProperty, keyPattern: string }> | null = definition.additionalProperties === undefined
+          ? null
+          : definition.additionalProperties
+            .map(property => {
+              const type = parsePropertyType('', property.type)
+              return type === null
+                ? null
+                : { type, keyPattern: property.keyPattern ?? 'string' }
+            })
+            .filter(p => p !== null) as Array<{ type: IProperty, keyPattern: string }>
+        additionalProperties?.forEach(property => {
+          property.type.types
+            .filter(type => type.isComponent)
+            .forEach(type => {
+              const name = type.name as string
+              if (dependencies[name] === undefined) dependencies[name] = []
+              if (!dependencies[name].includes(v)) dependencies[name].push(v)
+              componentDependencies.push(name)
+            })
+        })
 
         const properties = Object
           .keys(definition.properties ?? {})
@@ -533,9 +612,6 @@ function processConfiguration (config: IComponentsConfiguration): IProcessedConf
         result[fullName][v] = {
           allowsExtensions: definition.allowsExtensions,
           additionalProperties: additionalProperties === null ? undefined : additionalProperties,
-          additionalPropertiesKeyPattern: definition.additionalPropertiesKeyPattern !== undefined
-            ? definition.additionalPropertiesKeyPattern
-            : 'string',
           properties: properties.reduce((prev: Record<string, IProperty>, curr) => {
             prev[curr.key] = curr
             return prev
